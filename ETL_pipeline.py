@@ -2,12 +2,15 @@ import psycopg2
 import pandas as pd
 from dotenv import load_dotenv
 import os
-from preprocessing import load_and_clean_data
+import preprocessing 
 from logger_config import logger
 from decorators import execution_time
 from decorators import manage_connection
 from decorators import retry
 from datetime import datetime
+import boto3
+from preprocessing import get_data_from_s3
+
 load_dotenv()
 
 
@@ -291,6 +294,29 @@ def run_qa_checks(conn):
         print(f"Error running QA checks: {e}")
         raise
 
+def raw_to_archive():
+    s3=boto3.client("s3")
+    copy_source={
+         "Bucket": 'devika-etl-pipeline-practice',
+         "Key": 'raw/bank_transactions_data_2.csv'
+     }
+    
+    response=s3.copy_object(
+        CopySource=copy_source,
+        Bucket='devika-etl-pipeline-practice',
+        Key="archive/bank_transactions_data_2.csv"
+
+    )
+    print("copied to archive")
+    s3.delete_object(
+        Bucket='devika-etl-pipeline-practice',
+        Key="raw/bank_transactions_data_2.csv"
+    )
+    print(" deleted raw")
+     
+    
+
+
 
 
 
@@ -302,11 +328,11 @@ def main(conn):
 
     logger.info("ETL started")
 
-    # Step 1
-    logger.info("Data preprocessing started...")
-    df = load_and_clean_data(
-        "bank_transactions_data_2.csv"
-    )
+    raw_data = preprocessing.get_data_from_s3()
+    logger.info(" data fetched form s3")
+
+    df = preprocessing.load_and_clean_data(raw_data)
+    logger.info("preprocessed")
 
     # Step 2
     logger.info("Database connected")
@@ -322,6 +348,9 @@ def main(conn):
     # Step 5
     print("\n=== Step 5: QA Checks ===")
     run_qa_checks(conn)
+
+    print(" testing archive loading")
+    raw_to_archive()
 
     print("\nETL Pipeline completed successfully!")
 

@@ -1,4 +1,6 @@
 import pandas as pd
+import boto3
+from io import StringIO
 
 def load_and_clean_data(csv_path):
     """
@@ -16,12 +18,12 @@ def load_and_clean_data(csv_path):
     df['TransactionDate'] = (
     pd.to_datetime(df['TransactionDate'])
     .dt.strftime('%Y-%m-%d %H:%M:%S')
-)
+    )
 
     df['PreviousTransactionDate'] = (
     pd.to_datetime(df['PreviousTransactionDate'])
     .dt.strftime('%Y-%m-%d %H:%M:%S')
-)   
+   )   
     
     # Convert date columns to datetime
     print("\nConverting date columns...")
@@ -44,8 +46,8 @@ def load_and_clean_data(csv_path):
     #numeric
     df["TransactionAmount"] = (
     df["TransactionAmount"]
-    .round(2)
-)
+    .round(2)  
+    )
 
     df["AccountBalance"] = (
         df["AccountBalance"]
@@ -67,8 +69,25 @@ def load_and_clean_data(csv_path):
     
     return df
 
+
+def get_data_from_s3():
+    s3=boto3.client("s3")
+    response=s3.get_object(
+        Bucket="devika-etl-pipeline-practice",
+        Key="raw/bank_transactions_data_2.csv"
+    )
+
+    csv_data=response["Body"].read().decode("utf-8")
+
+    return StringIO(csv_data)
+
+
+
+
+
+
 if __name__ == "__main__":
     # Test the preprocessing
-    df = load_and_clean_data("bank_transactions_data_2.csv")
+    df = load_and_clean_data(get_data_from_s3())
     print("\nFirst few rows:")
     print(df.head())
