@@ -294,28 +294,42 @@ def run_qa_checks(conn):
         print(f"Error running QA checks: {e}")
         raise
 
-def raw_to_archive():
+def raw_to_archive(key):
     s3=boto3.client("s3")
     copy_source={
          "Bucket": 'devika-etl-pipeline-practice',
-         "Key": 'raw/bank_transactions_data_2.csv'
+         "Key": key
      }
     
-    response=s3.copy_object(
+    s3.copy_object(
         CopySource=copy_source,
         Bucket='devika-etl-pipeline-practice',
-        Key="archive/bank_transactions_data_2.csv"
+        Key = key.replace("raw/", "archive/")
 
     )
     print("copied to archive")
     s3.delete_object(
         Bucket='devika-etl-pipeline-practice',
-        Key="raw/bank_transactions_data_2.csv"
+        Key=key
     )
     print(" deleted raw")
      
     
+def list_objects_in_s3():
+    s3=boto3.client("s3")
+    response=s3.list_objects_v2(
+        Bucket="devika-etl-pipeline-practice",
+        Prefix="raw/"
+    )
 
+    if "Contents" in response:
+        list_of_files = []
+        for obj in response["Contents"]:
+            list_of_files.append(obj["Key"])
+        return list_of_files
+        
+    else:
+        return None
 
 
 
@@ -327,30 +341,34 @@ def main(conn):
     """
 
     logger.info("ETL started")
+    
+    list_of_files=list_objects_in_s3()
+    if list_of_files:
+        for key in list_of_files:
 
-    raw_data = preprocessing.get_data_from_s3()
-    logger.info(" data fetched form s3")
+            raw_data = preprocessing.get_data_from_s3(key)
+            logger.info(" data fetched form s3")
 
-    df = preprocessing.load_and_clean_data(raw_data)
-    logger.info("preprocessed")
+            df = preprocessing.load_and_clean_data(raw_data)
+            logger.info("preprocessed")
 
-    # Step 2
-    logger.info("Database connected")
+            # Step 2
+            logger.info("Database connected")
 
-    # Step 3
-    print("\n=== Step 3: Create Table ===")
-    create_table(conn)
+            # Step 3
+            print("\n=== Step 3: Create Table ===")
+            create_table(conn)
 
-    # Step 4
-    print("\n=== Step 4: Load Data ===")
-    insert_data(conn, df)
+            # Step 4
+            print("\n=== Step 4: Load Data ===")
+            insert_data(conn, df)
 
-    # Step 5
-    print("\n=== Step 5: QA Checks ===")
-    run_qa_checks(conn)
+            # Step 5
+            print("\n=== Step 5: QA Checks ===")
+            run_qa_checks(conn)
 
-    print(" testing archive loading")
-    raw_to_archive()
+            print(" raw to archive loading")
+            raw_to_archive(key)
 
     print("\nETL Pipeline completed successfully!")
 

@@ -70,11 +70,13 @@ def load_and_clean_data(csv_path):
     return df
 
 
-def get_data_from_s3():
+
+
+def get_data_from_s3(key):
     s3=boto3.client("s3")
     response=s3.get_object(
         Bucket="devika-etl-pipeline-practice",
-        Key="raw/bank_transactions_data_2.csv"
+        Key=key
     )
 
     csv_data=response["Body"].read().decode("utf-8")
@@ -88,6 +90,6 @@ def get_data_from_s3():
 
 if __name__ == "__main__":
     # Test the preprocessing
-    df = load_and_clean_data(get_data_from_s3())
+    df = load_and_clean_data(get_data_from_s3("raw/bank_transactions_data_2.csv"))
     print("\nFirst few rows:")
     print(df.head())
