@@ -315,22 +315,50 @@ def raw_to_archive(key):
     print(" deleted raw")
      
     
+# def list_objects_in_s3():
+#     s3=boto3.client("s3")
+#     response=s3.list_objects_v2(
+#         Bucket="devika-etl-pipeline-practice",
+#         Prefix="raw/"
+#     )
+
+#     if "Contents" in response:
+#         list_of_files = []
+#         for obj in response["Contents"]:
+#             list_of_files.append(obj["Key"])
+#         return list_of_files
+        
+#     else:
+#         return None
+
+
 def list_objects_in_s3():
-    s3=boto3.client("s3")
-    response=s3.list_objects_v2(
+
+    s3 = boto3.client("s3")
+
+    response = s3.list_objects_v2(
         Bucket="devika-etl-pipeline-practice",
         Prefix="raw/"
     )
 
-    if "Contents" in response:
-        list_of_files = []
-        for obj in response["Contents"]:
-            list_of_files.append(obj["Key"])
-        return list_of_files
-        
-    else:
-        return None
+    list_of_files = []
 
+    if "Contents" not in response:
+        return []
+
+    for obj in response["Contents"]:
+
+        key = obj["Key"]
+
+        # Ignore folder markers
+        if key.endswith("/"):
+            continue
+
+        # Only process csv files
+        if key.endswith(".csv"):
+            list_of_files.append(key)
+
+    return list_of_files
 
 
 
@@ -341,36 +369,57 @@ def main(conn):
     """
 
     logger.info("ETL started")
-    
-    list_of_files=list_objects_in_s3()
-    if list_of_files:
-        for key in list_of_files:
 
+    list_of_files = list_objects_in_s3()
+
+    print(f"Files found: {list_of_files}")
+
+    if not list_of_files:
+        print("No files found in raw folder")
+        return
+
+    # Create table only once
+    print("\n=== Step 1: Create Table ===")
+    create_table(conn)
+
+    for key in list_of_files:
+
+        print(f"\nProcessing file: {key}")
+
+        try:
+
+            # Fetch file from S3
             raw_data = preprocessing.get_data_from_s3(key)
-            logger.info(" data fetched form s3")
+            logger.info(f"Fetched {key} from S3")
 
+            # Skip empty files
+            if raw_data.getvalue().strip() == "":
+                print(f"Skipping empty file: {key}")
+                continue
+
+            # Preprocess
             df = preprocessing.load_and_clean_data(raw_data)
-            logger.info("preprocessed")
+            logger.info("Preprocessing completed")
 
-            # Step 2
-            logger.info("Database connected")
-
-            # Step 3
-            print("\n=== Step 3: Create Table ===")
-            create_table(conn)
-
-            # Step 4
-            print("\n=== Step 4: Load Data ===")
+            # Load
+            print("\n=== Step 2: Load Data ===")
             insert_data(conn, df)
 
-            # Step 5
-            print("\n=== Step 5: QA Checks ===")
+            # QA
+            print("\n=== Step 3: QA Checks ===")
             run_qa_checks(conn)
 
-            print(" raw to archive loading")
+            # Archive
+            print("\n=== Step 4: Archive File ===")
             raw_to_archive(key)
 
-    print("\nETL Pipeline completed successfully!")
+            print(f"Successfully processed: {key}")
 
+        except Exception as e:
+
+            print(f"Failed processing {key}: {e}")
+            logger.error(f"Failed processing {key}: {e}")
+
+    print("\nETL Pipeline completed successfully!")
 if __name__ == "__main__":
     main()
